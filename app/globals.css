@@ -1,26 +1,185 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* 문구점 종이 톤 — 흰 화면 대신 미색 갱지 위에서 노는 앱 */
+  --color-paper: #f2ede1;
+  --color-paper-deep: #e6dfcc;
+  --color-card: #fffdf6;
+  --color-line: #ddd4bf;
+  --color-line-soft: #eae2d0;
+  --color-ink: #262218;
+  --color-ink-soft: #5f584a;
+  --color-ink-faint: #9c9384;
+  --color-accent: #b4472f;
+  --color-kraft: #d8c49b;
+
+  --font-sans: "Pretendard Variable", Pretendard, system-ui, sans-serif;
+  --font-hand: "Gaegu", "Pretendard Variable", Pretendard, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--color-paper);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  /* 아주 옅은 종이 결 */
+  background-color: var(--color-paper);
+  background-image: radial-gradient(rgba(120, 105, 75, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* 다크 모드 없음 — '종이' 라는 소재가 이 앱의 정체성이라 단일 라이트 룩으로 간다 */
+
+@layer utilities {
+  /* 손으로 오려낸 듯한 종이 조각 그림자 */
+  .paper-edge {
+    box-shadow:
+      0 1px 0 rgba(120, 105, 75, 0.18),
+      0 6px 14px -8px rgba(60, 50, 30, 0.35);
+  }
+  .tilt-a {
+    transform: rotate(-0.7deg);
+  }
+  .tilt-b {
+    transform: rotate(0.6deg);
+  }
+}
+
+/* ── 통 흔들기 ─────────────────────────────── */
+@keyframes bucket-shake {
+  0%,
+  100% {
+    transform: rotate(0deg) translateY(0);
+  }
+  15% {
+    transform: rotate(-4deg) translateY(-3px);
+  }
+  35% {
+    transform: rotate(3.5deg) translateY(-1px);
+  }
+  55% {
+    transform: rotate(-3deg) translateY(-4px);
+  }
+  75% {
+    transform: rotate(2.5deg) translateY(-1px);
+  }
+  90% {
+    transform: rotate(-1.2deg) translateY(0);
+  }
+}
+.animate-shake {
+  animation: bucket-shake 0.42s ease-in-out infinite;
+}
+
+/* ── 접힌 제비가 통에서 올라옴 ─────────────── */
+@keyframes slip-rise {
+  from {
+    opacity: 0;
+    transform: translateY(46px) scale(0.7) rotate(-8deg);
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(-2deg);
+  }
+}
+.animate-rise {
+  animation: slip-rise 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+/* ── 펼쳐지기 ──────────────────────────────── */
+@keyframes slip-unfold {
+  from {
+    transform: perspective(700px) rotateX(78deg) scaleY(0.42);
+    opacity: 0.4;
+  }
+  to {
+    transform: perspective(700px) rotateX(0deg) scaleY(1);
+    opacity: 1;
+  }
+}
+.animate-unfold {
+  animation: slip-unfold 0.34s cubic-bezier(0.18, 0.86, 0.28, 1.1) both;
+  transform-origin: top center;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.animate-pop {
+  animation: pop-in 0.22s ease-out both;
+}
+
+/* 방금 배정된 이름표 — 한 번 툭 떨어지고 만다 */
+@keyframes tag-land {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px) rotate(-4deg) scale(1.08);
+  }
+  70% {
+    transform: translateY(2px) rotate(1deg) scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+}
+.animate-land {
+  animation: tag-land 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+}
+
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-banner {
+  animation: banner-in 0.3s ease-out both;
+}
+
+/* ── 색종이 ────────────────────────────────── */
+@keyframes confetti-fall {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -12vh, 0) rotate(0deg);
+  }
+  8% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--drift, 0px), 105vh, 0) rotate(var(--spin, 540deg));
+  }
+}
+.confetti-piece {
+  animation: confetti-fall var(--dur, 2.6s) linear var(--delay, 0s) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-shake,
+  .animate-rise,
+  .animate-unfold,
+  .animate-pop,
+  .animate-land,
+  .animate-banner,
+  .confetti-piece {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

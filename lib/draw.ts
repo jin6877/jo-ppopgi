@@ -65,12 +65,27 @@ export function slipForLatecomer(
   return pool[randInt(pool.length)];
 }
 
-/** "12명 → 각 조 3명" / "11명 → 3명 3개 조 · 2명 1개 조" 같은 미리보기 문구. */
+/** "12명 → 각 조 3명" / "13명 → 4명 1개 조 · 3명 3개 조" 같은 미리보기 문구. */
 export function planSummary(peopleCount: number, groupCount: number): string {
   if (groupCount <= 0 || peopleCount <= 0) return "";
   const base = Math.floor(peopleCount / groupCount);
   const rest = peopleCount % groupCount;
   if (rest === 0) return `각 조 ${base}명씩`;
   if (base === 0) return `${groupCount - rest}개 조는 빈 조가 됩니다`;
-  return `${base + 1}명 ${rest}개 조 · ${base}명 ${groupCount - rest}개 조`;
+  return `${base + 1}명 ${rest}개 조 · ${base}명 ${groupCount - rest}개 조 (어느 조인지는 뽑아 봐야 압니다)`;
+}
+
+/** 한 조가 가질 수 있는 최대 인원. 나눠떨어지지 않으면 모든 조가 이 자리까지 열려 있는 셈이다. */
+export function seatCap(peopleCount: number, groupCount: number): number {
+  if (groupCount <= 0) return 0;
+  return Math.ceil(peopleCount / groupCount);
+}
+
+/** 통 옆에 붙는 한 줄. 어느 조가 한 명 더 받을지는 절대 흘리지 않는다. */
+export function capacityLabel(peopleCount: number, groupCount: number): string {
+  if (groupCount <= 0 || peopleCount <= 0) return "";
+  const base = Math.floor(peopleCount / groupCount);
+  const rest = peopleCount % groupCount;
+  if (rest === 0) return `각 조 ${base}명씩`;
+  return `각 조 ${base}~${base + 1}명`;
 }

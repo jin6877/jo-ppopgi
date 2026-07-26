@@ -45,6 +45,8 @@ export type Action =
   | { type: "draw"; personId: string }
   | { type: "undo" }
   | { type: "redraw" }
+  | { type: "movePerson"; personId: string; toGroupId: string }
+  | { type: "swapPeople"; aId: string; bId: string }
   | { type: "backToSetup" }
   | { type: "toggleMute" }
   | { type: "resetAll" };
@@ -80,7 +82,12 @@ export function reducer(state: AppState, action: Action): AppState {
       let bucket = state.bucket;
       if (state.started) {
         const groupIds = state.groups.map((g) => g.id);
-        const allocated = tally([...state.log.map((l) => l.groupId), ...state.bucket]);
+        // 이미 확정된 자리 = 배정된 사람 + 통에 남은 제비.
+        // (뽑기 기록이 아니라 '현재 배치' 를 세야 손으로 옮긴 뒤에도 계산이 맞는다)
+        const allocated = tally([
+          ...state.people.flatMap((p) => (p.groupId ? [p.groupId] : [])),
+          ...state.bucket,
+        ]);
         const next = [...bucket];
         let total = state.people.length;
         for (let i = 0; i < added.length; i++) {
@@ -181,6 +188,34 @@ export function reducer(state: AppState, action: Action): AppState {
         log: [],
         people: state.people.map((p) => ({ ...p, groupId: null })),
       };
+
+    // 뽑기가 끝난 뒤 손으로 밸런스 맞추기 — 사람을 다른 조로 옮긴다
+    case "movePerson": {
+      const person = state.people.find((p) => p.id === action.personId);
+      if (!person || person.groupId === action.toGroupId) return state;
+      if (!state.groups.some((g) => g.id === action.toGroupId)) return state;
+      return {
+        ...state,
+        people: state.people.map((p) =>
+          p.id === action.personId ? { ...p, groupId: action.toGroupId } : p,
+        ),
+      };
+    }
+
+    // 두 사람 자리 바꾸기 — 조 인원은 그대로 두고 사람만 맞바꾼다
+    case "swapPeople": {
+      const a = state.people.find((p) => p.id === action.aId);
+      const b = state.people.find((p) => p.id === action.bId);
+      if (!a || !b || a.id === b.id || a.groupId === b.groupId) return state;
+      return {
+        ...state,
+        people: state.people.map((p) => {
+          if (p.id === a.id) return { ...p, groupId: b.groupId };
+          if (p.id === b.id) return { ...p, groupId: a.groupId };
+          return p;
+        }),
+      };
+    }
 
     case "toggleMute":
       return { ...state, muted: !state.muted };

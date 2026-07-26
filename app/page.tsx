@@ -7,8 +7,7 @@ import { DrawOverlay } from "@/components/DrawOverlay";
 import { GroupBoard } from "@/components/GroupBoard";
 import { SetupPanel } from "@/components/SetupPanel";
 import { WaitingList } from "@/components/WaitingList";
-import { randInt, tally } from "@/lib/draw";
-import { colorOf } from "@/lib/palette";
+import { capacityLabel, randInt, seatCap } from "@/lib/draw";
 import { playFanfare, playTick, setMuted as applyMute } from "@/lib/sound";
 import { useAppState } from "@/lib/store";
 
@@ -25,8 +24,19 @@ export default function Home() {
 
   const { people, groups, bucket, started, log, muted } = state;
   const waiting = useMemo(() => people.filter((p) => !p.groupId), [people]);
-  const remainingByGroup = useMemo(() => tally(bucket), [bucket]);
   const done = started && people.length > 0 && waiting.length === 0;
+
+  // 빈 자리 표시는 '실제 제비 구성' 이 아니라 '모든 조에 열려 있는 최대 정원' 기준.
+  // 13명 4조라면 네 조 모두 4자리로 보인다 — 어느 조가 4명이 될지는 뽑아야 알 수 있게.
+  const slotsByGroup = useMemo(() => {
+    const cap = seatCap(people.length, groups.length);
+    const out: Record<string, number> = {};
+    for (const g of groups) {
+      const members = people.filter((p) => p.groupId === g.id).length;
+      out[g.id] = Math.max(0, Math.min(cap - members, bucket.length));
+    }
+    return out;
+  }, [people, groups, bucket.length]);
 
   // 음소거 설정은 나머지 상태와 함께 저장된다 — 여기선 사운드 모듈에만 반영
   useEffect(() => {
@@ -166,28 +176,15 @@ export default function Home() {
                 </p>
               )}
 
-              {/* 조별 남은 자리 — 후반에 "이제 남은 건 3조뿐" 이 보이는 게 이 방식의 묘미 */}
-              <ul className="flex w-full flex-wrap justify-center gap-1.5">
-                {groups.map((g, i) => {
-                  const c = colorOf(i);
-                  const left = remainingByGroup[g.id] ?? 0;
-                  return (
-                    <li
-                      key={g.id}
-                      className="rounded-sm px-2 py-1 text-xs font-semibold"
-                      style={{
-                        background: left ? c.soft : "transparent",
-                        color: left ? c.ink : "var(--color-ink-faint)",
-                        border: `1px solid ${left ? c.ink : "var(--color-line)"}`,
-                        opacity: left ? 1 : 0.55,
-                      }}
-                      title={left ? `${g.name} 남은 자리 ${left}` : `${g.name} 마감`}
-                    >
-                      {g.name} {left ? left : "마감"}
-                    </li>
-                  );
-                })}
-              </ul>
+              {/* 조별 제비 구성은 절대 보여 주지 않는다 — 뽑기 전에 답이 새기 때문 */}
+              <p className="text-center text-xs text-ink-soft">
+                {capacityLabel(people.length, groups.length)}
+                {people.length % groups.length !== 0 && (
+                  <span className="mt-0.5 block text-ink-faint">
+                    한 명 더 들어가는 조는 뽑아 봐야 압니다
+                  </span>
+                )}
+              </p>
 
               {!done && (
                 <button
@@ -266,12 +263,32 @@ export default function Home() {
               onAddLate={(name) => dispatch({ type: "addPeople", names: [name] })}
               onRemove={(id) => dispatch({ type: "removePerson", id })}
             />
-            <GroupBoard
-              groups={groups}
-              people={people}
-              remainingByGroup={remainingByGroup}
-              justAssigned={justAssigned}
-            />
+            <div className="flex flex-col gap-2">
+              {done && (
+                <p className="animate-banner rounded-sm border border-dashed border-line bg-card px-3 py-2 text-xs leading-relaxed text-ink-soft">
+                  인원이 아쉬우면 손으로 조정하세요 — <b className="text-ink">이름을 끌어</b> 다른
+                  조에 놓으면 이동, <b className="text-ink">사람 위에 놓으면</b> 둘이 자리를
+                  바꿉니다. (누른 뒤 옮길 곳을 눌러도 됩니다)
+                </p>
+              )}
+              <GroupBoard
+                groups={groups}
+                people={people}
+                slotsByGroup={slotsByGroup}
+                justAssigned={justAssigned}
+                editable={done}
+                onMove={(personId, toGroupId) => {
+                  dispatch({ type: "movePerson", personId, toGroupId });
+                  setJustAssigned(personId);
+                  playTick();
+                }}
+                onSwap={(aId, bId) => {
+                  dispatch({ type: "swapPeople", aId, bId });
+                  setJustAssigned(bId);
+                  playTick();
+                }}
+              />
+            </div>
           </section>
         </main>
       )}

@@ -16,6 +16,10 @@ export const metadata: Metadata = {
       "이름을 넣고 한 명씩 눌러 통에서 제비를 뽑습니다. 종이 제비 방식 그대로, 조 인원은 저절로 균등하게.",
     type: "website",
     locale: "ko_KR",
+    images: "/thumbnail.png", // 1200×630 포스터 (docs/thumbnail.svg 에서 렌더)
+  },
+  twitter: {
+    card: "summary_large_image",
   },
 };
 

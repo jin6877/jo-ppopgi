@@ -8,7 +8,7 @@ import { GroupBoard } from "@/components/GroupBoard";
 import { SetupPanel } from "@/components/SetupPanel";
 import { WaitingList } from "@/components/WaitingList";
 import { capacityLabel, randInt, seatCap } from "@/lib/draw";
-import { playFanfare, playTick, setMuted as applyMute } from "@/lib/sound";
+import { playFanfare, playReveal, playRustle, playTick, setMuted as applyMute } from "@/lib/sound";
 import { useAppState } from "@/lib/store";
 
 type Reveal = { personId: string; groupId: string; remaining: number };
@@ -22,7 +22,10 @@ export default function Home() {
   const drewThisSession = useRef(false);
   const celebrated = useRef(false);
 
-  const { people, groups, bucket, started, log, muted } = state;
+  const [spinning, setSpinning] = useState(false);
+  const [spinLeaders, setSpinLeaders] = useState<Record<string, string> | null>(null);
+
+  const { people, groups, bucket, started, log, muted, leaders } = state;
   const waiting = useMemo(() => people.filter((p) => !p.groupId), [people]);
   const done = started && people.length > 0 && waiting.length === 0;
 
@@ -65,6 +68,42 @@ export default function Home() {
     return () => window.clearTimeout(t);
   }, [done, reveal]);
 
+  // 조장 룰렛 — 조마다 왕관이 돌다가 1.1초 뒤 멈춘다
+  useEffect(() => {
+    if (!spinning) return;
+    const roll = () => {
+      const next: Record<string, string> = {};
+      for (const g of groups) {
+        const members = people.filter((p) => p.groupId === g.id);
+        if (members.length > 0) next[g.id] = members[randInt(members.length)].id;
+      }
+      setSpinLeaders(next);
+    };
+    const iv = window.setInterval(roll, 90);
+    const stop = window.setTimeout(() => {
+      setSpinning(false);
+      setSpinLeaders(null);
+      dispatch({ type: "pickLeaders" });
+      playFanfare();
+    }, 1100);
+    return () => {
+      window.clearInterval(iv);
+      window.clearTimeout(stop);
+    };
+  }, [spinning, groups, people, dispatch]);
+
+  const rollLeaders = () => {
+    if (spinning) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      dispatch({ type: "pickLeaders" });
+      playReveal();
+      return;
+    }
+    playRustle(1.1);
+    setSpinning(true);
+  };
+
   const pick = (personId: string) => {
     if (reveal) return;
     const slip = bucket[bucket.length - 1];
@@ -85,11 +124,14 @@ export default function Home() {
   };
 
   const resultText = () => {
+    const hasLeader = Object.keys(leaders).length > 0;
     const lines = [`🎲 조뽑기 결과 — ${people.length}명 · ${groups.length}조`, ""];
     for (const g of groups) {
-      const names = people.filter((p) => p.groupId === g.id).map((p) => p.name);
-      lines.push(`${g.name} (${names.length}명): ${names.join(", ") || "-"}`);
+      const members = people.filter((p) => p.groupId === g.id);
+      const names = members.map((p) => (leaders[g.id] === p.id ? `👑${p.name}` : p.name));
+      lines.push(`${g.name} (${members.length}명): ${names.join(", ") || "-"}`);
     }
+    if (hasLeader) lines.push("", "👑 = 조장");
     lines.push("", "https://jo-ppopgi.vercel.app");
     return lines.join("\n");
   };
@@ -218,6 +260,18 @@ export default function Home() {
                 <p className="font-hand text-xl font-bold">조 나누기 완료 🎉</p>
                 <button
                   type="button"
+                  onClick={rollLeaders}
+                  disabled={spinning}
+                  className="rounded-sm border-2 border-ink bg-card px-4 py-2.5 text-sm font-bold transition enabled:hover:bg-paper enabled:active:translate-y-px disabled:opacity-60"
+                >
+                  {spinning
+                    ? "조장 뽑는 중…"
+                    : Object.keys(leaders).length > 0
+                      ? "조장 다시 뽑기 👑"
+                      : "조장 뽑기 👑"}
+                </button>
+                <button
+                  type="button"
                   onClick={copyResult}
                   className="rounded-sm border-2 border-ink bg-ink px-4 py-2.5 text-sm font-bold text-card transition active:translate-y-px"
                 >
@@ -276,7 +330,8 @@ export default function Home() {
                 people={people}
                 slotsByGroup={slotsByGroup}
                 justAssigned={justAssigned}
-                editable={done}
+                leaders={spinLeaders ?? leaders}
+                editable={done && !spinning}
                 onMove={(personId, toGroupId) => {
                   dispatch({ type: "movePerson", personId, toGroupId });
                   setJustAssigned(personId);

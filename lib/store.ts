@@ -16,6 +16,8 @@ export type AppState = {
   log: DrawLog[];
   /** 통을 채웠는가 = 뽑기 시작 여부 */
   started: boolean;
+  /** 조 id → 조장으로 뽑힌 사람 id. 조 편성이 바뀌면 그 조의 조장은 무효가 된다. */
+  leaders: Record<string, string>;
   muted: boolean;
   seq: number;
 };
@@ -31,6 +33,7 @@ export const initialState: AppState = {
   bucket: [],
   log: [],
   started: false,
+  leaders: {},
   muted: false,
   seq: 1,
 };
@@ -47,6 +50,7 @@ export type Action =
   | { type: "redraw" }
   | { type: "movePerson"; personId: string; toGroupId: string }
   | { type: "swapPeople"; aId: string; bId: string }
+  | { type: "pickLeaders" }
   | { type: "backToSetup" }
   | { type: "toggleMute" }
   | { type: "resetAll" };
@@ -64,6 +68,16 @@ function cleanNames(raw: string[], existing: readonly Person[]): string[] {
     out.push(name);
   }
   return out;
+}
+
+/** 조를 옮겼거나 명단에서 빠진 조장은 무효 — 그 조는 조장 없음으로 되돌린다. */
+function pruneLeaders(people: Person[], leaders: Record<string, string>): Record<string, string> {
+  const kept: Record<string, string> = {};
+  for (const [groupId, personId] of Object.entries(leaders ?? {})) {
+    const p = people.find((x) => x.id === personId);
+    if (p && p.groupId === groupId) kept[groupId] = personId;
+  }
+  return kept;
 }
 
 export function reducer(state: AppState, action: Action): AppState {
@@ -107,16 +121,22 @@ export function reducer(state: AppState, action: Action): AppState {
       if (!target) return state;
       const people = state.people.filter((p) => p.id !== action.id);
 
-      if (!state.started) return { ...state, people };
+      const leaders = pruneLeaders(people, state.leaders);
+      if (!state.started) return { ...state, people, leaders };
 
       // 뽑기 중 제외: 이미 뽑았으면 그 제비를 통에 돌려놓지 않고 없앤다(자리 하나가 사라진 것),
       // 아직 안 뽑았으면 통에서 아무 제비나 한 장 뺀다.
       if (target.groupId) {
-        return { ...state, people, log: state.log.filter((l) => l.personId !== action.id) };
+        return {
+          ...state,
+          people,
+          leaders,
+          log: state.log.filter((l) => l.personId !== action.id),
+        };
       }
       const bucket = [...state.bucket];
       if (bucket.length > 0) bucket.splice(randInt(bucket.length), 1);
-      return { ...state, people, bucket };
+      return { ...state, people, bucket, leaders };
     }
 
     case "renameGroup":
@@ -143,6 +163,7 @@ export function reducer(state: AppState, action: Action): AppState {
         ...state,
         started: true,
         log: [],
+        leaders: {},
         people: state.people.map((p) => ({ ...p, groupId: null })),
         bucket: buildBucket(
           state.people.length,
@@ -169,11 +190,15 @@ export function reducer(state: AppState, action: Action): AppState {
       if (!last) return state;
       const bucket = [...state.bucket];
       bucket.splice(randInt(bucket.length + 1), 0, last.groupId); // 통에 도로 넣고 섞이게
+      const people = state.people.map((p) =>
+        p.id === last.personId ? { ...p, groupId: null } : p,
+      );
       return {
         ...state,
         bucket,
+        people,
         log: state.log.slice(0, -1),
-        people: state.people.map((p) => (p.id === last.personId ? { ...p, groupId: null } : p)),
+        leaders: pruneLeaders(people, state.leaders),
       };
     }
 
@@ -186,6 +211,7 @@ export function reducer(state: AppState, action: Action): AppState {
         started: false,
         bucket: [],
         log: [],
+        leaders: {},
         people: state.people.map((p) => ({ ...p, groupId: null })),
       };
 
@@ -194,12 +220,10 @@ export function reducer(state: AppState, action: Action): AppState {
       const person = state.people.find((p) => p.id === action.personId);
       if (!person || person.groupId === action.toGroupId) return state;
       if (!state.groups.some((g) => g.id === action.toGroupId)) return state;
-      return {
-        ...state,
-        people: state.people.map((p) =>
-          p.id === action.personId ? { ...p, groupId: action.toGroupId } : p,
-        ),
-      };
+      const people = state.people.map((p) =>
+        p.id === action.personId ? { ...p, groupId: action.toGroupId } : p,
+      );
+      return { ...state, people, leaders: pruneLeaders(people, state.leaders) };
     }
 
     // 두 사람 자리 바꾸기 — 조 인원은 그대로 두고 사람만 맞바꾼다
@@ -207,14 +231,23 @@ export function reducer(state: AppState, action: Action): AppState {
       const a = state.people.find((p) => p.id === action.aId);
       const b = state.people.find((p) => p.id === action.bId);
       if (!a || !b || a.id === b.id || a.groupId === b.groupId) return state;
-      return {
-        ...state,
-        people: state.people.map((p) => {
-          if (p.id === a.id) return { ...p, groupId: b.groupId };
-          if (p.id === b.id) return { ...p, groupId: a.groupId };
-          return p;
-        }),
-      };
+      const people = state.people.map((p) => {
+        if (p.id === a.id) return { ...p, groupId: b.groupId };
+        if (p.id === b.id) return { ...p, groupId: a.groupId };
+        return p;
+      });
+      return { ...state, people, leaders: pruneLeaders(people, state.leaders) };
+    }
+
+    // 조별로 한 명씩 조장 뽑기 — 누를 때마다 새로 뽑는다
+    case "pickLeaders": {
+      const leaders: Record<string, string> = {};
+      for (const g of state.groups) {
+        const members = state.people.filter((p) => p.groupId === g.id);
+        if (members.length === 0) continue; // 빈 조는 조장도 없다
+        leaders[g.id] = members[randInt(members.length)].id;
+      }
+      return { ...state, leaders };
     }
 
     case "toggleMute":

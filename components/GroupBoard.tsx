@@ -15,6 +15,8 @@ type Props = {
   slotsByGroup: Record<string, number>;
   /** 방금 배정된 사람 (한 번 떨어지는 연출) */
   justAssigned: string | null;
+  /** 조 id → 조장 person id. 뽑는 중(룰렛)에는 매 프레임 바뀐 값이 들어온다. */
+  leaders?: Record<string, string>;
   /** 다 뽑은 뒤에만 켠다 — 이름을 끌어 조를 바꿀 수 있는 상태 */
   editable?: boolean;
   onMove?: (personId: string, toGroupId: string) => void;
@@ -45,6 +47,7 @@ export function GroupBoard({
   people,
   slotsByGroup,
   justAssigned,
+  leaders = {},
   editable = false,
   onMove,
   onSwap,
@@ -172,6 +175,7 @@ export function GroupBoard({
                   const isGhost = ghost?.personId === p.id;
                   const isSwapTarget = hover.personId === p.id;
                   const isSelected = selected === p.id;
+                  const isLeader = leaders[g.id] === p.id;
                   const Tag = editable ? "button" : "div";
                   return (
                     <li key={`${p.id}-${p.groupId}`}>
@@ -197,12 +201,21 @@ export function GroupBoard({
                         }`}
                         style={{
                           borderColor: c.ink,
-                          background: isSwapTarget || isSelected ? c.soft : c.tint,
+                          background: isSwapTarget || isSelected || isLeader ? c.soft : c.tint,
                           color: c.ink,
                           borderStyle: isSwapTarget ? "dashed" : "solid",
+                          borderWidth: isLeader ? 2 : 1,
                           boxShadow: isSelected ? `0 0 0 2px ${c.ink}` : undefined,
                         }}
                       >
+                        {isLeader && (
+                          <>
+                            <span aria-hidden className="mr-1">
+                              👑
+                            </span>
+                            <span className="sr-only">조장 </span>
+                          </>
+                        )}
                         {p.name}
                       </Tag>
                     </li>

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BucketArt } from "@/components/BucketArt";
-import { Confetti } from "@/components/Confetti";
+import { Confetti, GOLD } from "@/components/Confetti";
 import { DrawOverlay } from "@/components/DrawOverlay";
 import { GroupBoard } from "@/components/GroupBoard";
 import { SetupPanel } from "@/components/SetupPanel";
@@ -24,6 +24,8 @@ export default function Home() {
 
   const [spinning, setSpinning] = useState(false);
   const [spinLeaders, setSpinLeaders] = useState<Record<string, string> | null>(null);
+  /** 조장 확정 연출 — 값이 바뀔 때마다 다시 재생된다(0 이면 꺼짐) */
+  const [cheer, setCheer] = useState(0);
 
   const { people, groups, bucket, started, log, muted, leaders } = state;
   const waiting = useMemo(() => people.filter((p) => !p.groupId), [people]);
@@ -85,12 +87,20 @@ export default function Home() {
       setSpinLeaders(null);
       dispatch({ type: "pickLeaders" });
       playFanfare();
+      setCheer((n) => n + 1);
     }, 1100);
     return () => {
       window.clearInterval(iv);
       window.clearTimeout(stop);
     };
   }, [spinning, groups, people, dispatch]);
+
+  // 확정 연출은 잠깐만 (링·반짝이·금색 축포)
+  useEffect(() => {
+    if (!cheer) return;
+    const t = window.setTimeout(() => setCheer(0), 2600);
+    return () => window.clearTimeout(t);
+  }, [cheer]);
 
   const rollLeaders = () => {
     if (spinning) return;
@@ -331,6 +341,7 @@ export default function Home() {
                 slotsByGroup={slotsByGroup}
                 justAssigned={justAssigned}
                 leaders={spinLeaders ?? leaders}
+                celebrate={cheer}
                 editable={done && !spinning}
                 onMove={(personId, toGroupId) => {
                   dispatch({ type: "movePerson", personId, toGroupId });
@@ -364,6 +375,7 @@ export default function Home() {
         />
       )}
       {confetti && <Confetti />}
+      {cheer > 0 && <Confetti key={cheer} colors={GOLD} count={26} speed={0.75} />}
     </div>
   );
 }

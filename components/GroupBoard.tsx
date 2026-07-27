@@ -17,6 +17,8 @@ type Props = {
   justAssigned: string | null;
   /** 조 id → 조장 person id. 뽑는 중(룰렛)에는 매 프레임 바뀐 값이 들어온다. */
   leaders?: Record<string, string>;
+  /** 조장 확정 연출 트리거. 0 이면 꺼짐, 값이 바뀌면 연출이 다시 재생된다. */
+  celebrate?: number;
   /** 다 뽑은 뒤에만 켠다 — 이름을 끌어 조를 바꿀 수 있는 상태 */
   editable?: boolean;
   onMove?: (personId: string, toGroupId: string) => void;
@@ -33,6 +35,13 @@ type DragRef = {
 
 const DRAG_THRESHOLD = 6; // px — 이보다 덜 움직이면 '탭(선택)' 으로 본다
 
+// 조장 이름표 주변에서 터지는 반짝이 자리
+const SPARKS = [
+  { at: "-top-2 left-1", delay: "0s" },
+  { at: "-top-2.5 right-3", delay: "0.16s" },
+  { at: "-bottom-2 right-0", delay: "0.32s" },
+];
+
 /** 좌표 아래에 있는 드롭 대상 찾기 (유령 조각은 pointer-events:none 이라 걸리지 않는다) */
 function hitTest(x: number, y: number) {
   const el = document.elementFromPoint(x, y);
@@ -48,6 +57,7 @@ export function GroupBoard({
   slotsByGroup,
   justAssigned,
   leaders = {},
+  celebrate = 0,
   editable = false,
   onMove,
   onSwap,
@@ -132,6 +142,7 @@ export function GroupBoard({
     setSelected(null);
   };
 
+  const cheering = celebrate > 0;
   const ghostPerson = ghost ? people.find((p) => p.id === ghost.personId) : undefined;
   const ghostColor = ghostPerson ? colorOf(groupIndex(ghostPerson.groupId)) : null;
 
@@ -178,7 +189,7 @@ export function GroupBoard({
                   const isLeader = leaders[g.id] === p.id;
                   const Tag = editable ? "button" : "div";
                   return (
-                    <li key={`${p.id}-${p.groupId}`}>
+                    <li key={`${p.id}-${p.groupId}`} className="relative">
                       <Tag
                         {...(editable
                           ? {
@@ -210,7 +221,11 @@ export function GroupBoard({
                       >
                         {isLeader && (
                           <>
-                            <span aria-hidden className="mr-1">
+                            <span
+                              aria-hidden
+                              key={`crown-${celebrate}`}
+                              className={`mr-1 ${cheering ? "animate-crown" : ""}`}
+                            >
                               👑
                             </span>
                             <span className="sr-only">조장 </span>
@@ -218,6 +233,29 @@ export function GroupBoard({
                         )}
                         {p.name}
                       </Tag>
+
+                      {/* 확정 순간에만 잠깐 — 퍼지는 링 + 반짝이 */}
+                      {isLeader && cheering && (
+                        <span key={`fx-${celebrate}`} aria-hidden>
+                          <span
+                            className="animate-halo pointer-events-none absolute inset-0 rounded-sm border-2"
+                            style={{ borderColor: c.ink }}
+                          />
+                          <span
+                            className="animate-halo-late pointer-events-none absolute inset-0 rounded-sm border-2"
+                            style={{ borderColor: "#d9a441" }}
+                          />
+                          {SPARKS.map((s, si) => (
+                            <span
+                              key={si}
+                              className={`animate-sparkle pointer-events-none absolute text-xs ${s.at}`}
+                              style={{ animationDelay: s.delay }}
+                            >
+                              ✨
+                            </span>
+                          ))}
+                        </span>
+                      )}
                     </li>
                   );
                 })}
